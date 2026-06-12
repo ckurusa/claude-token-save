@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Token Dashboard</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, 'Segoe UI', sans-serif; background: #f5f5f0; color: #1a1a18; min-height: 100vh; }
+
+  #upload-zone {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    min-height: 100vh; padding: 2rem; text-align: center;
+  }
+  .drop-box {
+    border: 1.5px dashed #b4b2a9; border-radius: 16px; padding: 3rem 4rem;
+    background: #fff; cursor: pointer; transition: border-color .2s, background .2s;
+    max-width: 480px; width: 100%;
+  }
+  .drop-box:hover, .drop-box.drag-over { border-color: #534AB7; background: #EEEDFE; }
+  .drop-box .icon { font-size: 2.5rem; color: #888780; margin-bottom: 1rem; }
+  .drop-box h2 { font-size: 18px; font-weight: 500; margin-bottom: 0.5rem; }
+  .drop-box p { font-size: 14px; color: #5F5E5A; }
+  #file-input { display: none; }
+  .hint { margin-top: 1.5rem; font-size: 13px; color: #888780; }
+
+  #dashboard { display: none; padding: 2rem; max-width: 860px; margin: 0 auto; }
+  .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; }
+  .header h1 { font-size: 20px; font-weight: 500; }
+  .reload-btn {
+    font-size: 13px; color: #534AB7; background: none; border: 0.5px solid #AFA9EC;
+    border-radius: 8px; padding: 6px 14px; cursor: pointer;
+  }
+  .reload-btn:hover { background: #EEEDFE; }
+
+  .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 1.5rem; }
+  .metric-card {
+    background: #fff; border-radius: 12px; border: 0.5px solid #e0ded8;
+    padding: 1rem 1.25rem;
+  }
+  .metric-card .label { font-size: 12px; color: #888780; margin-bottom: 4px; text-transform: uppercase; letter-spacing: .04em; }
+  .metric-card .value { font-size: 24px; font-weight: 500; }
+  .metric-card .sub { font-size: 12px; color: #888780; margin-top: 2px; }
+
+  .threshold-card { background: #fff; border-radius: 12px; border: 0.5px solid #e0ded8; padding: 1rem 1.25rem; margin-bottom: 1.5rem; }
+  .threshold-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem; }
+  .threshold-header span { font-size: 13px; color: #5F5E5A; }
+  .threshold-input-wrap { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #888780; }
+  .threshold-input-wrap input {
+    width: 64px; font-size: 13px; padding: 3px 6px; border: 0.5px solid #d3d1c7;
+    border-radius: 6px; text-align: right; background: #f5f5f0;
+  }
+  .bar-track { height: 10px; background: #f1efe8; border-radius: 99px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 99px; transition: width .4s; }
+  .bar-green  { background: #639922; }
+  .bar-amber  { background: #BA7517; }
+  .bar-red    { background: #E24B4A; }
+  .threshold-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 6px; }
+  .threshold-footer .pct { font-size: 13px; font-weight: 500; }
+  .status-badge { font-size: 12px; padding: 2px 10px; border-radius: 99px; }
+  .badge-green  { background: #EAF3DE; color: #3B6D11; }
+  .badge-amber  { background: #FAEEDA; color: #854F0B; }
+  .badge-red    { background: #FCEBEB; color: #A32D2D; }
+
+  .model-card { background: #fff; border-radius: 12px; border: 0.5px solid #e0ded8; padding: 1rem 1.25rem; margin-bottom: 1rem; }
+  .model-header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 1rem; }
+  .model-name { font-size: 14px; font-weight: 500; background: #EEEDFE; color: #3C3489; border-radius: 6px; padding: 3px 10px; }
+  .model-cost { font-size: 18px; font-weight: 500; }
+  .token-row { display: grid; grid-template-columns: 140px 1fr 80px; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .token-label { font-size: 12px; color: #5F5E5A; }
+  .token-bar-wrap { height: 6px; background: #f1efe8; border-radius: 99px; overflow: hidden; }
+  .token-bar-fill { height: 100%; border-radius: 99px; }
+  .bar-purple { background: #7F77DD; }
+  .bar-blue   { background: #378ADD; }
+  .bar-teal   { background: #1D9E75; }
+  .bar-gray   { background: #888780; }
+  .token-count { font-size: 12px; color: #888780; text-align: right; }
+
+  .savings-note { font-size: 12px; color: #3B6D11; background: #EAF3DE; border-radius: 6px; padding: 6px 10px; margin-top: 10px; }
+</style>
+</head>
+<body>
+
+<div id="upload-zone">
+  <label for="file-input">
+    <div class="drop-box" id="drop-box">
+      <div class="icon">&#128202;</div>
+      <h2>세션 파일을 여기에 드롭</h2>
+      <p>또는 클릭해서 .jsonl 파일 선택</p>
+    </div>
+  </label>
+  <input type="file" id="file-input" accept=".jsonl">
+  <p class="hint">파일 위치: <code>~/.claude/projects/&lt;slug&gt;/&lt;session&gt;.jsonl</code></p>
+</div>
+
+<div id="dashboard">
+  <div class="header">
+    <h1>&#128202; Claude Token Dashboard</h1>
+    <button class="reload-btn" onclick="resetView()">다른 파일 열기</button>
+  </div>
+  <div class="summary-grid" id="summary-grid"></div>
+  <div class="threshold-card" id="threshold-card"></div>
+  <div id="model-cards"></div>
+</div>
+
+<script>
+const PRICING = {
+  "claude-opus-4-8":   { input: 15.0,  output: 75.0,  cache_read: 1.5,  cache_write: 18.75 },
+  "claude-opus-4-7":   { input: 15.0,  output: 75.0,  cache_read: 1.5,  cache_write: 18.75 },
+  "claude-sonnet-4-6": { input: 3.0,   output: 15.0,  cache_read: 0.3,  cache_write: 3.75  },
+  "claude-haiku-4-5":  { input: 0.8,   output: 4.0,   cache_read: 0.08, cache_write: 1.0   },
+};
+const DEFAULT_PRICE = { input: 3.0, output: 15.0, cache_read: 0.3, cache_write: 3.75 };
+let currentThreshold = 1.0;
+let lastData = null;
+
+function calcCost(model, t) {
+  const p = PRICING[model] || DEFAULT_PRICE;
+  return (t.input * p.input + t.output * p.output + t.cache_read * p.cache_read + t.cache_write * p.cache_write) / 1e6;
+}
+
+function calcSavings(model, t) {
+  const p = PRICING[model] || DEFAULT_PRICE;
+  const withoutCache = (t.input + t.cache_read + t.cache_write) * p.input / 1e6;
+  const withCache = (t.input * p.input + t.cache_read * p.cache_read + t.cache_write * p.cache_write) / 1e6;
+  return withoutCache - withCache;
+}
+
+function fmt(n) { return n.toLocaleString(); }
+
+function parseJSONL(text) {
+  const totals = {};
+  for (const line of text.split('\n')) {
+    if (!line.trim()) continue;
+    let obj;
+    try { obj = JSON.parse(line); } catch { continue; }
+    if (obj.type !== 'assistant') continue;
+    const msg = obj.message || {};
+    const model = msg.model || 'unknown';
+    const usage = msg.usage || {};
+    if (!usage.output_tokens && !usage.input_tokens) continue;
+    if (!totals[model]) totals[model] = { input: 0, output: 0, cache_read: 0, cache_write: 0, turns: 0 };
+    const t = totals[model];
+    t.input       += usage.input_tokens || 0;
+    t.output      += usage.output_tokens || 0;
+    t.cache_read  += usage.cache_read_input_tokens || 0;
+    t.cache_write += usage.cache_creation_input_tokens || 0;
+    t.turns       += 1;
+  }
+  return totals;
+}
+
+function renderDashboard(totals, filename) {
+  lastData = totals;
+  const models = Object.keys(totals);
+  let totalCost = 0, totalTurns = 0, totalSavings = 0;
+  let grandInput = 0, grandOutput = 0, grandCacheRead = 0, grandCacheWrite = 0;
+
+  for (const [model, t] of Object.entries(totals)) {
+    totalCost    += calcCost(model, t);
+    totalSavings += calcSavings(model, t);
+    totalTurns   += t.turns;
+    grandInput   += t.input;
+    grandOutput  += t.output;
+    grandCacheRead  += t.cache_read;
+    grandCacheWrite += t.cache_write;
+  }
+
+  const totalAllTokens = grandInput + grandOutput + grandCacheRead + grandCacheWrite;
+  const cacheHitRate = totalAllTokens > 0 ? (grandCacheRead / (grandInput + grandCacheRead + grandCacheWrite) * 100) : 0;
+
+  document.getElementById('summary-grid').innerHTML = `
+    <div class="metric-card">
+      <div class="label">총 추정 비용</div>
+      <div class="value">$${totalCost.toFixed(4)}</div>
+      <div class="sub">${models.length}개 모델</div>
+    </div>
+    <div class="metric-card">
+      <div class="label">총 턴 수</div>
+      <div class="value">${totalTurns}</div>
+      <div class="sub">응답 횟수</div>
+    </div>
+    <div class="metric-card">
+      <div class="label">캐시 절약액</div>
+      <div class="value" style="color:#3B6D11">$${totalSavings.toFixed(4)}</div>
+      <div class="sub">캐시 히트율 ${cacheHitRate.toFixed(0)}%</div>
+    </div>
+    <div class="metric-card">
+      <div class="label">출력 토큰</div>
+      <div class="value">${fmt(grandOutput)}</div>
+      <div class="sub">단가 가장 높음</div>
+    </div>
+  `;
+
+  renderThreshold(totalCost);
+
+  const maxTokens = Math.max(...models.flatMap(m => {
+    const t = totals[m];
+    return [t.input, t.output, t.cache_read, t.cache_write];
+  }));
+
+  document.getElementById('model-cards').innerHTML = models.map(model => {
+    const t = totals[model];
+    const cost = calcCost(model, t);
+    const savings = calcSavings(model, t);
+    const rows = [
+      { label: '입력 토큰',      val: t.input,       cls: 'bar-purple' },
+      { label: '출력 토큰',      val: t.output,      cls: 'bar-blue'   },
+      { label: '캐시 읽기 (↓90%)', val: t.cache_read,  cls: 'bar-teal'   },
+      { label: '캐시 생성',      val: t.cache_write, cls: 'bar-gray'   },
+    ];
+    const rowsHTML = rows.map(r => `
+      <div class="token-row">
+        <div class="token-label">${r.label}</div>
+        <div class="token-bar-wrap"><div class="token-bar-fill ${r.cls}" style="width:${(r.val/maxTokens*100).toFixed(1)}%"></div></div>
+        <div class="token-count">${fmt(r.val)}</div>
+      </div>`).join('');
+    return `
+      <div class="model-card">
+        <div class="model-header">
+          <span class="model-name">${model}</span>
+          <span class="model-cost">$${cost.toFixed(4)}</span>
+        </div>
+        ${rowsHTML}
+        <div class="savings-note">&#128200; 캐시로 약 $${savings.toFixed(4)} 절약 &nbsp;/&nbsp; 턴 수: ${t.turns}회</div>
+      </div>`;
+  }).join('');
+
+  document.getElementById('upload-zone').style.display = 'none';
+  document.getElementById('dashboard').style.display = 'block';
+}
+
+function renderThreshold(totalCost) {
+  const ratio = totalCost / currentThreshold * 100;
+  const barPct = Math.min(ratio, 100);
+  const barCls = ratio < 70 ? 'bar-green' : ratio < 100 ? 'bar-amber' : 'bar-red';
+  const badgeCls = ratio < 70 ? 'badge-green' : ratio < 100 ? 'badge-amber' : 'badge-red';
+  const statusText = ratio < 70 ? '양호' : ratio < 100 ? '주의' : '초과!';
+  document.getElementById('threshold-card').innerHTML = `
+    <div class="threshold-header">
+      <span>비용 임계치 대비</span>
+      <div class="threshold-input-wrap">
+        임계치 $<input type="number" id="threshold-input" value="${currentThreshold}" min="0.1" step="0.1" onchange="updateThreshold(this.value)">
+      </div>
+    </div>
+    <div class="bar-track"><div class="bar-fill ${barCls}" style="width:${barPct.toFixed(1)}%"></div></div>
+    <div class="threshold-footer">
+      <span class="pct">${ratio.toFixed(0)}%</span>
+      <span class="status-badge ${badgeCls}">${statusText}</span>
+    </div>`;
+}
+
+function updateThreshold(val) {
+  currentThreshold = parseFloat(val) || 1.0;
+  if (lastData) {
+    let totalCost = 0;
+    for (const [model, t] of Object.entries(lastData)) totalCost += calcCost(model, t);
+    renderThreshold(totalCost);
+  }
+}
+
+function resetView() {
+  document.getElementById('upload-zone').style.display = 'flex';
+  document.getElementById('dashboard').style.display = 'none';
+  document.getElementById('file-input').value = '';
+}
+
+function loadFile(file) {
+  if (!file || !file.name.endsWith('.jsonl')) { alert('.jsonl 파일을 선택해 주세요.'); return; }
+  const reader = new FileReader();
+  reader.onload = e => renderDashboard(parseJSONL(e.target.result), file.name);
+  reader.readAsText(file, 'utf-8');
+}
+
+document.getElementById('file-input').addEventListener('change', e => loadFile(e.target.files[0]));
+
+const dropBox = document.getElementById('drop-box');
+dropBox.addEventListener('dragover', e => { e.preventDefault(); dropBox.classList.add('drag-over'); });
+dropBox.addEventListener('dragleave', () => dropBox.classList.remove('drag-over'));
+dropBox.addEventListener('drop', e => { e.preventDefault(); dropBox.classList.remove('drag-over'); loadFile(e.dataTransfer.files[0]); });
+</script>
+</body>
+</html>
