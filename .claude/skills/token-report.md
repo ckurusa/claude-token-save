@@ -1,3 +1,8 @@
+---
+name: token-report
+description: 현재 Claude Code 세션의 토큰 사용량과 추정 비용을 리포트합니다
+---
+
 # token-report
 
 현재 Claude Code 세션의 토큰 사용량과 추정 비용을 리포트합니다.
